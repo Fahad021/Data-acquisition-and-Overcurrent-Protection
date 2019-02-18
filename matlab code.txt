@@ -1,0 +1,133 @@
+clear all
+close all
+clc
+ 
+s=serial('com9');
+s.baudrate=115200;
+% set(s,'inputbuffersize',2);
+fopen(s);
+ref=2.5;
+vmul=257;
+imul=1.93;
+v_lim=0;
+c_lim=1;
+wait_time=5;
+window=1:200;
+windowsize=length(window)-1;
+data=zeros(1,windowsize+1);
+datav=zeros(1,windowsize+1);
+datai=zeros(1,windowsize+1);
+idx=1;
+pf=0;
+Irms=0;
+Vrms=0;
+Vmax=0;
+Imax=0;
+t_flag=0;
+fs=1/100e-6;
+plothandle=plot(datav);
+while(ishandle(plothandle))
+    tic
+    t_now=clock;
+    
+    if t_flag
+        if etime(t_now,t_trip)>wait_time
+            fprintf(s,'U');   % Command to reconnect load
+            t_flag=0;
+        end
+    end
+    
+    for idx=1:windowsize
+        if s.bytesavailable > 0
+            adc=fscanf(s,'%u');
+            %             s.bytesavailable=0;
+            % adc=fgetl(s);
+            if length(adc)==1 && idx>1
+                data(idx-1)=adc(end);
+                
+            end
+        end
+    end
+    tt=toc;
+    datai=mod(data,10000);
+    datai=datai*5/1024-ref;
+    datav=round(data/10000);
+    datav=datav*5/1024-ref;
+    
+    
+    Vmax=max(datav);Imax=max(datai);
+    
+    VV=(datav(1:end-1).*datav(2:end));
+    II=(datai(1:end-1).*datai(2:end));
+    
+    indv=find(VV<0);
+    indi=find(II<0) ;
+    Vrms=0;
+    Irms=0;
+    rangev=0;rangei=0;
+    if length(indv)>3
+        
+        rangev=(indv(end-1)-indv(end-3)+1);
+        %    range=26;
+        Vrms=sqrt(sumsqr(datav(indv(end-3):indv(end-3)+rangev-1))/rangev);  % calculate Vrms
+    end
+    if length(indi)>3
+        
+        rangei=(indi(end-1)-indi(end-3)+1);
+        %    range=26;
+        Irms=sqrt(sumsqr(datai(indi(end-3):indi(end-3)+rangei-1))/rangei);   % calculate Irms
+    end
+    %    Irms=sqrt(sumsqr(datai)/(windowsize));
+    %         Irms=sqrt(sumsqr(datai(indi(end-3):indi(end-3)+range-1))/range);
+    range=min(rangev,rangei);
+    P=0;
+    if length(indv)>3 && length(indi)>3
+        P=sum(datav(indv(end-3):indv(end-3)+range-1).*datai(indi(end-3):indi(end-3)+range-1))/range;  %calculate real power
+    end
+    S=Vrms*Irms; % calculate apparent power
+    pf=P/S;  %calculate power factor
+    
+    
+    
+    if Irms*imul>c_lim
+        fprintf(s,'T');  % Command to disconnect the load
+        t_trip=clock;
+        t_flag=1;
+        %         1
+    end
+    
+    %    P
+    acor=xcorr(datav);
+    [peaks,tlocs]=findpeaks(acor);
+    T_per=diff(tlocs); T_sample=median(T_per);
+    T_sec=T_sample;
+    fs=windowsize/tt*2;
+    f=1/T_sec*fs;  % calculate frequency
+    
+    
+    if(~isnan(pf))
+        
+        str=['Vrms=' num2str(vmul*Vrms)  '    Irms=' num2str(Irms*imul), '    PF=' num2str(pf)  '   Freq=' num2str(f)];
+    else
+        str=['Vrms=' num2str(vmul*Vrms)  '    Irms=' num2str(Irms*imul), '    PF=N/A (LOAD DISCONNECTED)'   '   Freq=' num2str(f)];
+    end
+    %     dispstr={'Vrms=' num2str(vmul*Vrms), '    Irms=' num2str(Irms*imul), ...
+    %         '    PF=' num2str(pf) ,'   Freq=' num2str(f)};
+    figure(1)
+    plothandle=plot(window,datav,window,datai,'Linewidth',2);ylim([-3 3]);xlim([40 windowsize-1]);
+    grid on
+    ylabel(['Voltage Multiplier= ' num2str(vmul) '  Current Multiplier= ' num2str(imul)]);
+    %     subplot(121),plot(datav(2:end),'linewidth',2);ylim([0 6]);grid on
+    %     subplot(122),plot(datai(2:end),'linewidth',2);ylim([0 6]);grid on
+    %     pause(.2);
+    text(40,2.25,str,'Fontsize',14);
+    %     annotation('textbox',[.2,.4,.1,.1],'String',dispstr,'FitBoxToText','on');
+    
+    legend('Voltage','Current','Location','Best');
+    flushinput(s);
+    drawnow
+end
+ 
+ 
+%%
+fclose(s)

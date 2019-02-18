@@ -1,0 +1,32 @@
+const int analogInPin = A0; // Analog input pin that the potentiometer is attached to
+const int analogInPin2 = A1;
+const int outpin =9;
+long sensorValue = 0;   // value read from the pot
+long sensorValue2=0;
+long summ=0;
+char mat='n';
+void setup() {
+  // initialize serial communications at 9600 bps:
+  Serial.begin(115200); 
+  pinMode(outpin,OUTPUT);
+  analogWrite(outpin,128);}
+void loop() {
+  // read the analog in value:s
+  sensorValue = analogRead(analogInPin);  
+  sensorValue2 = analogRead(analogInPin2);            
+  summ=sensorValue*10000+sensorValue2;
+  // map it to the range of the analog out:
+
+  // print the results to the serial monitor:
+  Serial.println((summ));   
+  
+  
+  if (Serial.available()>0)
+  mat=Serial.read();
+  end
+  
+  // wait 2 milliseconds before the next loop
+  // for the analog-to-digital converter to settle
+  // after the last reading:
+ // delay(1);                     
+}
